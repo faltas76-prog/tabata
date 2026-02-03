@@ -3,140 +3,158 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tabata Timer PRO</title>
+<title>Football Conditioning Timer</title>
 
 <style>
 body{
-  margin:0;font-family:Arial;background:#111;color:#fff;
-  display:flex;justify-content:center;align-items:center;height:100vh
+  margin:0;
+  font-family: "Arial Black", Arial, sans-serif;
+  background: radial-gradient(circle at center, #0b3d14, #031a08);
+  color:#fff;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
 }
 .app{
-  background:#1e1e1e;padding:22px;border-radius:14px;width:390px;text-align:center
+  background:linear-gradient(#1b5e20,#0d3d14);
+  border:4px solid #66bb6a;
+  padding:20px;
+  border-radius:16px;
+  width:430px;
+  text-align:center;
+  box-shadow:0 0 35px #000;
 }
-input,select{
-  width:95px;padding:6px;margin:4px;text-align:center
+h2{margin:6px 0 14px;letter-spacing:2px}
+
+select,input{
+  width:110px;
+  padding:6px;
+  margin:4px;
+  text-align:center;
+  font-weight:bold;
 }
 button{
-  padding:9px 14px;margin:5px;font-size:14px;cursor:pointer
+  padding:11px 16px;
+  margin:6px;
+  font-size:15px;
+  font-weight:bold;
+  cursor:pointer;
+  border:none;
+  border-radius:6px;
 }
-#time{font-size:56px;margin:10px 0}
-#phase{font-size:22px}
-#round{font-size:15px;opacity:.8}
-.small{font-size:12px;opacity:.6}
+button:hover{opacity:.9}
+
+#time{
+  font-size:72px;
+  margin:12px 0;
+  letter-spacing:4px;
+}
+#phase{font-size:26px}
+#round{font-size:16px;opacity:.9}
+.small{font-size:12px;opacity:.8}
 </style>
 </head>
 
 <body>
-<div class="app" id="app">
-<h2>Tabata Timer PRO</h2>
+<div class="app">
+<h2>⚽ KONDIČNÍ BLOK</h2>
 
-<select id="presetSelect" onchange="loadPreset(this.value)">
-  <option value="">— Preset —</option>
+<select onchange="preset(this.value)">
+  <option value="">— Typ tréninku —</option>
+  <option value="rsa">RSA sprinty</option>
+  <option value="hiit">HIIT běhy</option>
+  <option value="int">Intenzita</option>
+  <option value="aero">Aerobní blok</option>
+  <option value="test">Testový blok</option>
 </select>
-<br>
-<button onclick="saveCustomPreset()">💾 Uložit preset</button>
 
 <div><label>Příprava</label><br><input id="prep" type="number" value="10"></div>
-<div><label>Cvičení</label><br><input id="work" type="number" value="20"></div>
-<div><label>Odpočinek</label><br><input id="rest" type="number" value="10"></div>
-<div><label>Kola</label><br><input id="rounds" type="number" value="8"></div>
+<div><label>Běh</label><br><input id="work" type="number" value="30"></div>
+<div><label>Pauza</label><br><input id="rest" type="number" value="30"></div>
+<div><label>Série</label><br><input id="rounds" type="number" value="10"></div>
 
-<div id="phase">Připraven</div>
+<div id="phase">PŘIPRAV SE</div>
 <div id="time">00:00</div>
 <div id="round"></div>
 
-<button onclick="start()">Start</button>
-<button onclick="pause()">Pauza</button>
-<button onclick="reset()">Reset</button>
-<button onclick="toggleFullscreen()">Full-screen</button>
+<button onclick="start()">▶ START</button>
+<button onclick="pause()">⏸ PAUZA</button>
+<button onclick="reset()">⟲ RESET</button>
+<button onclick="toggleFullscreen()">⛶ FULL</button>
 
 <p class="small">
-🎙️ hlas: „Cvičení“, „Pauza“, „3–2–1“<br>
-🎤 povely: start / pauza / pokračuj / reset
+🗣️ Běh / Pauza / 3–2–1<br>
+🎯 verze pro kondičního trenéra
 </p>
 </div>
 
 <script>
-let timer,running=false,phase="prep",remaining=0,currentRound=1;
-const app=document.getElementById("app");
+let timer,running=false,phase="prep",remaining=0,round=1;
+
 const phaseEl=document.getElementById("phase");
 const timeEl=document.getElementById("time");
 const roundEl=document.getElementById("round");
-const presetSelect=document.getElementById("presetSelect");
 
-/* 🔊 AUDIO */
-function beep(f,d=200){
-  const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();
-  o.frequency.value=f;o.connect(g);g.connect(c.destination);o.start();
-  setTimeout(()=>{o.stop();c.close()},d);
-}
 function speak(t){
+  speechSynthesis.cancel();
   speechSynthesis.speak(new SpeechSynthesisUtterance(t));
 }
-
-/* 🧩 PRESETY */
-const builtInPresets={
-  "Tabata 20/10 ×8":[10,20,10,8],
-  "HIIT 30/15 ×10":[10,30,15,10],
-  "Kruháč 45/15 ×12":[10,45,15,12],
-  "Stretch 30/10 ×5":[10,30,10,5],
-  "EMOM 60 ×10":[10,60,0,10],
-  "Silový blok 40/20 ×6":[10,40,20,6]
-};
-
-function initPresets(){
-  presetSelect.innerHTML='<option value="">— Preset —</option>';
-  Object.keys(builtInPresets).forEach(p=>{
-    presetSelect.innerHTML+=`<option value="b:${p}">${p}</option>`;
-  });
-  const custom=JSON.parse(localStorage.getItem("customPresets")||"{}");
-  Object.keys(custom).forEach(p=>{
-    presetSelect.innerHTML+=`<option value="c:${p}">⭐ ${p}</option>`;
-  });
-}
-initPresets();
-
-function loadPreset(v){
-  if(!v)return;
-  let data;
-  if(v.startsWith("b:")) data=builtInPresets[v.slice(2)];
-  else data=JSON.parse(localStorage.getItem("customPresets"))[v.slice(2)];
-  [prep.value,work.value,rest.value,rounds.value]=data;
+function fmt(t){
+  return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0");
 }
 
-function saveCustomPreset(){
-  const name=prompt("Název presetu:");
-  if(!name)return;
-  const custom=JSON.parse(localStorage.getItem("customPresets")||"{}");
-  custom[name]=[+prep.value,+work.value,+rest.value,+rounds.value];
-  localStorage.setItem("customPresets",JSON.stringify(custom));
-  initPresets();
+function preset(p){
+  const x={
+    rsa:[10,6,24,6],
+    hiit:[10,30,30,10],
+    int:[10,45,15,8],
+    aero:[10,180,60,4],
+    test:[10,15,15,20]
+  };
+  if(!x[p])return;
+  [prep.value,work.value,rest.value,rounds.value]=x[p];
 }
 
-/* ⏱️ TIMER */
 function start(){
   if(running)return;
   running=true;
-  if(!remaining){phase="prep";remaining=+prep.value;currentRound=1;}
-  run();
+  if(!remaining){
+    phase="prep";
+    remaining=+prep.value;
+    round=1;
+  }
+  update(); tick();
+  timer=setInterval(tick,1000);
 }
-function run(){
-  timer=setInterval(()=>{
-    if(remaining<=3 && remaining>0){
-      speak(["","Jedna","Dva","Tři"][remaining]);
+
+function tick(){
+  update();
+  if(remaining<=3 && remaining>0){
+    speak(["","Jedna","Dva","Tři"][remaining]);
+  }
+  remaining--;
+  if(remaining<0){
+    if(phase==="prep"){
+      phase="work"; remaining=+work.value; speak("Běh");
+    }else if(phase==="work"){
+      if(round>=+rounds.value){finish();return;}
+      phase="rest"; remaining=+rest.value; speak("Pauza");
+    }else{
+      phase="work"; remaining=+work.value; round++; speak("Běh");
     }
-    remaining--;
-    if(remaining<0){
-      if(phase==="prep"){phase="work";remaining=+work.value;speak("Cvičení");}
-      else if(phase==="work"){
-        if(currentRound>=+rounds.value){finish();return;}
-        phase="rest";remaining=+rest.value;currentRound++;speak("Pauza");
-      }else{
-        phase="work";remaining=+work.value;speak("Cvičení");
-      }
-    }
-    update();
-  },1000);
+  }
+}
+
+function update(){
+  phaseEl.textContent=
+    phase==="prep"?"PŘÍPRAVA":
+    phase==="work"?"BĚH":"PAUZA";
+  timeEl.textContent=fmt(Math.max(remaining,0));
+  roundEl.textContent=
+    phase!=="prep"
+    ?`SÉRIE ${round} / ${rounds.value}`
+    :"ZAČÁTEK ZA:";
 }
 
 function pause(){
@@ -144,39 +162,18 @@ function pause(){
   clearInterval(timer);running=false;speak("Pauza");
 }
 function reset(){
-  clearInterval(timer);running=false;remaining=0;phase="prep";currentRound=1;
-  phaseEl.textContent="Připraven";timeEl.textContent="00:00";roundEl.textContent="";
-  app.style.background="#1e1e1e";
+  clearInterval(timer);running=false;remaining=0;round=1;
+  phaseEl.textContent="PŘIPRAV SE";timeEl.textContent="00:00";roundEl.textContent="";
 }
 function finish(){
-  clearInterval(timer);running=false;speak("Hotovo");beep(1200,600);
-  phaseEl.textContent="Hotovo 💪";
+  clearInterval(timer);running=false;
+  phaseEl.textContent="KONEC BLOKU";
+  speak("Konec série");
 }
-function update(){
-  const c={prep:"#1565c0",work:"#2e7d32",rest:"#c62828"};
-  app.style.background=c[phase];
-  phaseEl.textContent=phase==="prep"?"Příprava":phase==="work"?"Cvičení":"Odpočinek";
-  roundEl.textContent=phase!=="prep"?`Kolo ${currentRound}/${rounds.value}`:"";
-  timeEl.textContent=String(Math.floor(Math.max(remaining,0)/60)).padStart(2,"0")+":"+String(Math.max(remaining,0)%60).padStart(2,"0");
-}
-
-/* 🎙️ VOICE COMMANDS */
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(SR){
-  const rec=new SR();
-  rec.lang="cs-CZ";rec.continuous=true;
-  rec.onresult=e=>{
-    const t=e.results[e.results.length-1][0].transcript.toLowerCase();
-    if(t.includes("start"))start();
-    if(t.includes("pauza"))pause();
-    if(t.includes("pokračuj"))start();
-    if(t.includes("reset"))reset();
-  };
-  document.body.addEventListener("click",()=>rec.start(),{once:true});
-}
-
 function toggleFullscreen(){
-  document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+  document.fullscreenElement
+    ?document.exitFullscreen()
+    :document.documentElement.requestFullscreen();
 }
 </script>
 </body>
