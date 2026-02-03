@@ -3,65 +3,91 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Football Conditioning Timer</title>
+<title>Pro Football Conditioning Timer</title>
 
 <style>
 body{
   margin:0;
-  font-family: "Arial Black", Arial, sans-serif;
-  background: radial-gradient(circle at center, #0b3d14, #031a08);
+  font-family:"Arial Black",Arial,sans-serif;
+  background:
+    linear-gradient(rgba(0,0,0,.85),rgba(0,0,0,.85)),
+    url("https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/512px-FC_Barcelona_%28crest%29.svg.png");
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:380px;
   color:#fff;
   display:flex;
   justify-content:center;
   align-items:center;
   height:100vh;
 }
+
 .app{
-  background:linear-gradient(#1b5e20,#0d3d14);
-  border:4px solid #66bb6a;
-  padding:20px;
-  border-radius:16px;
-  width:430px;
+  background:linear-gradient(180deg,#0a1a3a,#7a0c1e);
+  border:4px solid #f5c842;
+  padding:22px;
+  border-radius:18px;
+  width:460px;
   text-align:center;
-  box-shadow:0 0 35px #000;
+  box-shadow:0 0 40px #000;
 }
-h2{margin:6px 0 14px;letter-spacing:2px}
+
+h2{
+  margin:6px 0 14px;
+  letter-spacing:3px;
+  color:#f5c842;
+}
 
 select,input{
-  width:110px;
+  width:115px;
   padding:6px;
   margin:4px;
   text-align:center;
   font-weight:bold;
 }
+
 button{
-  padding:11px 16px;
+  padding:12px 18px;
   margin:6px;
   font-size:15px;
   font-weight:bold;
   cursor:pointer;
   border:none;
-  border-radius:6px;
+  border-radius:8px;
+  background:#f5c842;
+  color:#000;
 }
 button:hover{opacity:.9}
 
 #time{
-  font-size:72px;
+  font-size:76px;
   margin:12px 0;
   letter-spacing:4px;
 }
-#phase{font-size:26px}
-#round{font-size:16px;opacity:.9}
-.small{font-size:12px;opacity:.8}
+
+#phase{
+  font-size:28px;
+  margin-bottom:4px;
+}
+
+#round{
+  font-size:16px;
+  opacity:.9;
+}
+
+.small{
+  font-size:12px;
+  opacity:.75;
+}
 </style>
 </head>
 
 <body>
 <div class="app">
-<h2>⚽ KONDIČNÍ BLOK</h2>
+<h2>⚽ PRO KONDIČNÍ TIMER</h2>
 
 <select onchange="preset(this.value)">
-  <option value="">— Typ tréninku —</option>
+  <option value="">— Kondiční blok —</option>
   <option value="rsa">RSA sprinty</option>
   <option value="hiit">HIIT běhy</option>
   <option value="int">Intenzita</option>
@@ -81,16 +107,16 @@ button:hover{opacity:.9}
 <button onclick="start()">▶ START</button>
 <button onclick="pause()">⏸ PAUZA</button>
 <button onclick="reset()">⟲ RESET</button>
-<button onclick="toggleFullscreen()">⛶ FULL</button>
+<button onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
 
 <p class="small">
 🗣️ Běh / Pauza / 3–2–1<br>
-🎯 verze pro kondičního trenéra
+🎯 Profi kondiční nástroj
 </p>
 </div>
 
 <script>
-let timer,running=false,phase="prep",remaining=0,round=1;
+let timer,running=false,phase="prep",remaining=0,serie=1;
 
 const phaseEl=document.getElementById("phase");
 const timeEl=document.getElementById("time");
@@ -100,20 +126,21 @@ function speak(t){
   speechSynthesis.cancel();
   speechSynthesis.speak(new SpeechSynthesisUtterance(t));
 }
+
 function fmt(t){
   return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0");
 }
 
 function preset(p){
-  const x={
+  const presets={
     rsa:[10,6,24,6],
     hiit:[10,30,30,10],
     int:[10,45,15,8],
     aero:[10,180,60,4],
     test:[10,15,15,20]
   };
-  if(!x[p])return;
-  [prep.value,work.value,rest.value,rounds.value]=x[p];
+  if(!presets[p])return;
+  [prep.value,work.value,rest.value,rounds.value]=presets[p];
 }
 
 function start(){
@@ -122,9 +149,10 @@ function start(){
   if(!remaining){
     phase="prep";
     remaining=+prep.value;
-    round=1;
+    serie=1;
   }
-  update(); tick();
+  update();
+  tick();
   timer=setInterval(tick,1000);
 }
 
@@ -138,10 +166,10 @@ function tick(){
     if(phase==="prep"){
       phase="work"; remaining=+work.value; speak("Běh");
     }else if(phase==="work"){
-      if(round>=+rounds.value){finish();return;}
+      if(serie>=+rounds.value){finish();return;}
       phase="rest"; remaining=+rest.value; speak("Pauza");
     }else{
-      phase="work"; remaining=+work.value; round++; speak("Běh");
+      phase="work"; remaining=+work.value; serie++; speak("Běh");
     }
   }
 }
@@ -150,26 +178,37 @@ function update(){
   phaseEl.textContent=
     phase==="prep"?"PŘÍPRAVA":
     phase==="work"?"BĚH":"PAUZA";
+
   timeEl.textContent=fmt(Math.max(remaining,0));
+
   roundEl.textContent=
     phase!=="prep"
-    ?`SÉRIE ${round} / ${rounds.value}`
+    ?`SÉRIE ${serie} / ${rounds.value}`
     :"ZAČÁTEK ZA:";
 }
 
 function pause(){
   if(!running)return;
-  clearInterval(timer);running=false;speak("Pauza");
+  clearInterval(timer); running=false; speak("Pauza");
 }
+
 function reset(){
-  clearInterval(timer);running=false;remaining=0;round=1;
-  phaseEl.textContent="PŘIPRAV SE";timeEl.textContent="00:00";roundEl.textContent="";
+  clearInterval(timer);
+  running=false;
+  remaining=0;
+  serie=1;
+  phaseEl.textContent="PŘIPRAV SE";
+  timeEl.textContent="00:00";
+  roundEl.textContent="";
 }
+
 function finish(){
-  clearInterval(timer);running=false;
+  clearInterval(timer);
+  running=false;
   phaseEl.textContent="KONEC BLOKU";
-  speak("Konec série");
+  speak("Konec bloku");
 }
+
 function toggleFullscreen(){
   document.fullscreenElement
     ?document.exitFullscreen()
