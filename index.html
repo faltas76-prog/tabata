@@ -11,17 +11,18 @@ body{
   display:flex;justify-content:center;align-items:center;height:100vh
 }
 .app{
-  background:#1e1e1e;padding:25px;border-radius:14px;width:380px;text-align:center
+  background:#1e1e1e;padding:22px;border-radius:14px;width:390px;text-align:center
 }
 input,select{
-  width:90px;padding:6px;margin:4px;text-align:center
+  width:95px;padding:6px;margin:4px;text-align:center
 }
 button{
-  padding:10px 14px;margin:6px;font-size:15px;cursor:pointer
+  padding:9px 14px;margin:5px;font-size:14px;cursor:pointer
 }
 #time{font-size:56px;margin:10px 0}
 #phase{font-size:22px}
-#round{font-size:16px;opacity:.8}
+#round{font-size:15px;opacity:.8}
+.small{font-size:12px;opacity:.6}
 </style>
 </head>
 
@@ -29,13 +30,11 @@ button{
 <div class="app" id="app">
 <h2>Tabata Timer PRO</h2>
 
-<select onchange="applyPreset(this.value)">
+<select id="presetSelect" onchange="loadPreset(this.value)">
   <option value="">— Preset —</option>
-  <option value="tabata">Tabata 20/10 ×8</option>
-  <option value="hiit">HIIT 30/15 ×10</option>
-  <option value="circuit">Kruháč 45/15 ×12</option>
-  <option value="stretch">Stretch 30/10 ×5</option>
 </select>
+<br>
+<button onclick="saveCustomPreset()">💾 Uložit preset</button>
 
 <div><label>Příprava</label><br><input id="prep" type="number" value="10"></div>
 <div><label>Cvičení</label><br><input id="work" type="number" value="20"></div>
@@ -51,18 +50,21 @@ button{
 <button onclick="reset()">Reset</button>
 <button onclick="toggleFullscreen()">Full-screen</button>
 
-<p style="font-size:12px;opacity:.6">
-🎙️ hlasem: „start“, „pauza“, „pokračuj“, „reset“
+<p class="small">
+🎙️ hlas: „Cvičení“, „Pauza“, „3–2–1“<br>
+🎤 povely: start / pauza / pokračuj / reset
 </p>
 </div>
 
 <script>
-let timer,running=false,phase="prep",remaining=0,currentRound=1,countdown=false;
+let timer,running=false,phase="prep",remaining=0,currentRound=1;
 const app=document.getElementById("app");
-const phaseEl=phaseEl||document.getElementById("phase");
+const phaseEl=document.getElementById("phase");
 const timeEl=document.getElementById("time");
 const roundEl=document.getElementById("round");
+const presetSelect=document.getElementById("presetSelect");
 
+/* 🔊 AUDIO */
 function beep(f,d=200){
   const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();
   o.frequency.value=f;o.connect(g);g.connect(c.destination);o.start();
@@ -72,112 +74,109 @@ function speak(t){
   speechSynthesis.speak(new SpeechSynthesisUtterance(t));
 }
 
-function applyPreset(p){
-  const presets={
-    tabata:[10,20,10,8],
-    hiit:[10,30,15,10],
-    circuit:[10,45,15,12],
-    stretch:[10,30,10,5]
-  };
-  if(!presets[p])return;
-  [prep.value,work.value,rest.value,rounds.value]=presets[p];
-  save();
+/* 🧩 PRESETY */
+const builtInPresets={
+  "Tabata 20/10 ×8":[10,20,10,8],
+  "HIIT 30/15 ×10":[10,30,15,10],
+  "Kruháč 45/15 ×12":[10,45,15,12],
+  "Stretch 30/10 ×5":[10,30,10,5],
+  "EMOM 60 ×10":[10,60,0,10],
+  "Silový blok 40/20 ×6":[10,40,20,6]
+};
+
+function initPresets(){
+  presetSelect.innerHTML='<option value="">— Preset —</option>';
+  Object.keys(builtInPresets).forEach(p=>{
+    presetSelect.innerHTML+=`<option value="b:${p}">${p}</option>`;
+  });
+  const custom=JSON.parse(localStorage.getItem("customPresets")||"{}");
+  Object.keys(custom).forEach(p=>{
+    presetSelect.innerHTML+=`<option value="c:${p}">⭐ ${p}</option>`;
+  });
+}
+initPresets();
+
+function loadPreset(v){
+  if(!v)return;
+  let data;
+  if(v.startsWith("b:")) data=builtInPresets[v.slice(2)];
+  else data=JSON.parse(localStorage.getItem("customPresets"))[v.slice(2)];
+  [prep.value,work.value,rest.value,rounds.value]=data;
 }
 
-function save(){
-  localStorage.setItem("tabata",JSON.stringify({
-    prep:prep.value,work:work.value,rest:rest.value,rounds:rounds.value
-  }));
+function saveCustomPreset(){
+  const name=prompt("Název presetu:");
+  if(!name)return;
+  const custom=JSON.parse(localStorage.getItem("customPresets")||"{}");
+  custom[name]=[+prep.value,+work.value,+rest.value,+rounds.value];
+  localStorage.setItem("customPresets",JSON.stringify(custom));
+  initPresets();
 }
-(function load(){
-  const s=JSON.parse(localStorage.getItem("tabata")); if(!s)return;
-  prep.value=s.prep;work.value=s.work;rest.value=s.rest;rounds.value=s.rounds;
-})();
 
+/* ⏱️ TIMER */
 function start(){
   if(running)return;
-  save(); running=true;
-  if(!remaining){ phase="prep"; remaining=+prep.value; currentRound=1; }
+  running=true;
+  if(!remaining){phase="prep";remaining=+prep.value;currentRound=1;}
   run();
 }
-
 function run(){
-timer=setInterval(()=>{
-  remaining--;
-  if(remaining<=0){
-    if(phase==="prep"||phase==="rest"){
-      countdown321(()=>{phase="work";remaining=+work.value;});
-      return;
+  timer=setInterval(()=>{
+    if(remaining<=3 && remaining>0){
+      speak(["","Jedna","Dva","Tři"][remaining]);
     }
-    if(phase==="work"){
-      if(currentRound>=+rounds.value){finish();return;}
-      phase="rest";remaining=+rest.value;currentRound++;
+    remaining--;
+    if(remaining<0){
+      if(phase==="prep"){phase="work";remaining=+work.value;speak("Cvičení");}
+      else if(phase==="work"){
+        if(currentRound>=+rounds.value){finish();return;}
+        phase="rest";remaining=+rest.value;currentRound++;speak("Pauza");
+      }else{
+        phase="work";remaining=+work.value;speak("Cvičení");
+      }
     }
-  }
-  update();
-},1000);
-}
-
-function countdown321(cb){
-  clearInterval(timer);
-  countdown=true;
-  let n=3;
-  speak("Tři");
-  const cd=setInterval(()=>{
-    timeEl.textContent=n;
-    beep(700);
-    if(n===2)speak("Dva");
-    if(n===1)speak("Jedna");
-    n--;
-    if(n<0){
-      clearInterval(cd);
-      countdown=false;
-      speak("Start");
-      cb(); update(); run();
-    }
+    update();
   },1000);
 }
 
 function pause(){
   if(!running)return;
-  clearInterval(timer); running=false; speak("Pauza");
+  clearInterval(timer);running=false;speak("Pauza");
 }
 function reset(){
-  clearInterval(timer); running=false; remaining=0; phase="prep"; currentRound=1;
-  phaseEl.textContent="Připraven"; timeEl.textContent="00:00"; roundEl.textContent="";
+  clearInterval(timer);running=false;remaining=0;phase="prep";currentRound=1;
+  phaseEl.textContent="Připraven";timeEl.textContent="00:00";roundEl.textContent="";
   app.style.background="#1e1e1e";
 }
 function finish(){
-  clearInterval(timer); running=false; speak("Hotovo"); beep(1200,600);
+  clearInterval(timer);running=false;speak("Hotovo");beep(1200,600);
   phaseEl.textContent="Hotovo 💪";
 }
-
 function update(){
   const c={prep:"#1565c0",work:"#2e7d32",rest:"#c62828"};
   app.style.background=c[phase];
   phaseEl.textContent=phase==="prep"?"Příprava":phase==="work"?"Cvičení":"Odpočinek";
   roundEl.textContent=phase!=="prep"?`Kolo ${currentRound}/${rounds.value}`:"";
-  timeEl.textContent=String(Math.floor(remaining/60)).padStart(2,"0")+":"+String(remaining%60).padStart(2,"0");
-}
-
-function toggleFullscreen(){
-  document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+  timeEl.textContent=String(Math.floor(Math.max(remaining,0)/60)).padStart(2,"0")+":"+String(Math.max(remaining,0)%60).padStart(2,"0");
 }
 
 /* 🎙️ VOICE COMMANDS */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR){
   const rec=new SR();
-  rec.lang="cs-CZ"; rec.continuous=true;
+  rec.lang="cs-CZ";rec.continuous=true;
   rec.onresult=e=>{
     const t=e.results[e.results.length-1][0].transcript.toLowerCase();
     if(t.includes("start"))start();
     if(t.includes("pauza"))pause();
     if(t.includes("pokračuj"))start();
     if(t.includes("reset"))reset();
-    if(t.includes("fullscreen"))toggleFullscreen();
   };
   document.body.addEventListener("click",()=>rec.start(),{once:true});
+}
+
+function toggleFullscreen(){
+  document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
 }
 </script>
 </body>
